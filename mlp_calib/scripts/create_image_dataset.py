@@ -38,9 +38,9 @@ def main(cfg):
     for dir in dirs:
         print(f"Creating directory: {dir}")
         os.makedirs(f"{dir}", exist_ok=True)
-    # iterate over images
-    img_idx = 0
-    radius_bearing = np.int32(0.5 * 4.7 * cfg.mm_to_pixel) #6.0
+    # 球体直径 (mm)，从配置读取，默认 4.7
+    sphere_diameter_mm = getattr(cfg, "sphere_diameter_mm", 4.7)
+    radius_bearing = np.int32(0.5 * sphere_diameter_mm * cfg.mm_to_pixel)
 
     while img_idx < len(normal_dataset):
         # read img + annotations
