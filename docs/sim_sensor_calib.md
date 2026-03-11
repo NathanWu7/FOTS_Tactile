@@ -11,6 +11,16 @@
 | **触觉 RGB** | Taxim：calib 目录下 `dataPack.npz`（f0）、`polycalib.npz`、`shadowTable.npz`、`gelmap.npy`、`params.json`。 |
 | **Marker** | FOTS：`gsmini_taxim_fots.py` 中 `marker_motion_sim_cfg`（num_markers_col/row, x0, y0, dx, dy），与 **params.py** 的 N, M, x0, y0, dx, dy 对应。 |
 
+**marker_motion_sim_cfg 各参数来源：**
+
+| 参数 | 来源 |
+|------|------|
+| **lamb** | 本仓库 **utils/marker_motion.py** 中 MarkerMotion 使用的形变权重（dilate/shear/twist），原 demos 中写死为 `[0.00125, 0.00021, 0.00038]`，仿真里与之一致即可。 |
+| **pyramid_kernel_size**、**kernel_size** | 本仓库 **params.py**：`pyramid_kernel_size = [51, 21, 11, 5]`，`kernel_size = 5`。 |
+| **marker_params**（num_markers_col/row, x0, y0, dx, dy） | 本仓库 **params.py** 的 **marker params**：`N=11` → num_markers_col，`M=9` → num_markers_row；`x0, y0, dx, dy` 为网格起点与步长（params 里 GelSight 为 x0=26, y0=15, dx=29, dy=26）。仿真里若坐标系不同（如先 col 后 row），可能对调为 x0=15, y0=26, dx=26, dy=29，需与触觉图宽高一致。 |
+
+修改 Marker 网格时改 **params.py** 中 N, M, x0, y0, dx, dy，并同步改仿真配置中的 `marker_params`（注意行列/xy 约定是否与 params 一致）。
+
 ---
 
 ## 标定流程（输出为仿真 calib 目录）
