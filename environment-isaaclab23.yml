@@ -1,0 +1,32 @@
+# Conda 环境：与 Isaac Lab 2.3 依赖一致（Python 3.11 + PyTorch 2.7）
+# 创建: conda env create -f environment-isaaclab23.yml
+# 激活: conda activate fots_isaaclab23
+# 安装 FOTS 依赖: pip install -r requirements-isaaclab23.txt
+# 若需 CUDA：pip install torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu128
+
+name: fots_isaaclab23
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+  - pip
+  - numpy>=1.26,<3
+  - scipy>=1.11,<1.15
+  - scikit-learn>=1.3,<1.6
+  - pandas>=2.0,<2.2
+  - matplotlib>=3.7,<3.9
+  - pillow>=10,<11
+  - pyudev>=0.23
+  - pip:
+    - torch==2.7.0
+    - torchvision==0.22.0
+    - opencv-python>=4.8,<4.10
+    - open3d>=0.18,<0.20
+    - imageio>=2.31,<2.35
+    - tqdm>=4.66,<5
+    - wandb>=0.16,<0.18
+    - hydra-core>=1.2,<1.3
+    - certifi>=2022.6
+    - six>=1.16

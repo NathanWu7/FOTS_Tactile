@@ -10,10 +10,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 import open3d as o3d
 import torch
-from attrdict import AttrDict
 from matplotlib.patches import Circle, Rectangle
 
 log = logging.getLogger(__name__)
+
+
+class AttrDict(dict):
+    """兼容 attrdict：支持用 . 访问键，无需安装 attrdict 包。"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__dict__ = self
+
 
 """
 Open3d visualization functions

@@ -23,8 +23,8 @@ if __name__=="__main__":
     model_center = mesh.get_center()
 
     R = mesh.get_rotation_matrix_from_xyz(rot) 
-    mesh.rotate(R, center=[0,0,0]) 
-    mesh.compute_vertex_normals 
+    mesh.rotate(R, center=[0,0,0])
+    mesh.compute_vertex_normals() 
 
     # Sample points from the mesh
     # pcd = mesh.sample_points_poisson_disk(number_of_points=1000000, init_factor=1)

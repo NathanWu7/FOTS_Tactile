@@ -10,21 +10,18 @@ from utils.fots_render import FOTSRender
 from mlp_calib.src.train.mlp_model import MLP
 
 def get_simapproach():
-    # load the image taken from a real digit sensor
-    model_path      = './assets/gel/gelsight_bg.npy' #digit_bg.npy'
-    background_img  = np.load(model_path)
-
-    # FOTS render params
-    ini_bg_mlp = np.load('./utils/utils_data/ini_bg_fots_gelsight.npy')
-    # load mlp model
+    import params as pr
+    stype = pr.sensor_type
+    # 路径按传感器类型拼接，便于扩展新传感器（如 xense）
+    model_path = f'./assets/gel/{stype}_bg.npy'
+    background_img = np.load(model_path)
+    ini_bg_mlp = np.load(f'./utils/utils_data/ini_bg_fots_{stype}.npy')
     model = MLP().to(device)
-    model.load_state_dict(torch.load("./mlp_calib/models/mlp_n2c_gelsight.pth"))
+    model.load_state_dict(torch.load(f"./mlp_calib/models/mlp_n2c_{stype}.pth"))
     model.to(device)
-
     simulation = FOTSRender(
         background_img      = background_img,
         bg_render           = ini_bg_mlp,
         model               = model,
     )
-
     return simulation

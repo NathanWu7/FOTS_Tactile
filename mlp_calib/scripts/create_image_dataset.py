@@ -11,7 +11,10 @@ from PIL import Image
 import numpy as np
 import torch
 import sys
-sys.path.append('/home/r404/mujoco_pybinding/FOTS/mlp_calib/src')
+
+_mlp_src = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+if _mlp_src not in sys.path:
+    sys.path.insert(0, _mlp_src)
 from src.dataio.create_csv import (combine_csv, create_pixel_csv,
                                    create_train_test_csv)
 from src.dataio.data_loader import data_loader
