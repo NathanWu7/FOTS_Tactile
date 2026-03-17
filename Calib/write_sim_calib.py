@@ -57,7 +57,14 @@ def main():
     if args.resolution:
         w, h = [int(x) for x in args.resolution.lower().split("x")]
     else:
-        h, w = pr.sensor_h, pr.sensor_w
+        pack_path = os.path.join(calib_dir, "dataPack.npz")
+        if os.path.isfile(pack_path):
+            pack = np.load(pack_path, allow_pickle=True)
+            h, w = int(pack["f0"].shape[0]), int(pack["f0"].shape[1])
+            print(f"Use dataPack resolution: {w}x{h}")
+        else:
+            h, w = pr.sensor_h, pr.sensor_w
+            print(f"Use params.py resolution: {w}x{h}")
     gelmap = np.zeros((h, w), dtype=np.float64)
     np.save(os.path.join(calib_dir, "gelmap.npy"), gelmap)
     pixmm = 1.0 / pr.mm_to_pixel

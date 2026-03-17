@@ -41,6 +41,18 @@ def interpolate_holes(img):
 def main():
     ap = argparse.ArgumentParser(description="Generate polycalib.npz from dataPack.npz.")
     ap.add_argument("--data_path", type=str, default=".", help="Folder containing dataPack.npz.")
+    ap.add_argument(
+        "--ball_radius_mm",
+        type=float,
+        default=None,
+        help="Override sphere radius in mm for calibration (default from calib_params).",
+    )
+    ap.add_argument(
+        "--mm_to_pixel",
+        type=float,
+        default=None,
+        help="Override mm_to_pixel for calibration (default from params via calib_params).",
+    )
     args = ap.parse_args()
     data_path = os.path.abspath(args.data_path)
     pack_path = os.path.join(data_path, "dataPack.npz")
@@ -49,10 +61,27 @@ def main():
     data = np.load(pack_path, allow_pickle=True)
     f0, imgs = data["f0"], data["imgs"]
     touch_center, touch_radius = data["touch_center"], data["touch_radius"]
-    ball_radius_pix = rcp.ball_radius_mm / rcp.pixmm
+    ball_radius_mm = args.ball_radius_mm if args.ball_radius_mm is not None else rcp.ball_radius_mm
+    pixmm = (1.0 / args.mm_to_pixel) if args.mm_to_pixel is not None else rcp.pixmm
+    ball_radius_pix = ball_radius_mm / pixmm
+    if ball_radius_pix <= 1e-8:
+        raise SystemExit("Invalid ball radius in pixels, please check --ball_radius_mm / --mm_to_pixel.")
+    radius_max = float(np.max(touch_radius))
+    if radius_max > ball_radius_pix * 1.05:
+        print(
+            "[WARN] touch_radius max=%.2f px is larger than ball_radius_pix=%.2f px. "
+            "This can cause severe gradient clipping and unstable polycalib. "
+            "Please check mm_to_pixel / ball_radius_mm (or pass --mm_to_pixel/--ball_radius_mm)."
+            % (radius_max, ball_radius_pix)
+        )
     num_bins = rcp.num_bins
     bg_proc = process_initial_frame(f0, rcp.kscale, rcp.diff_threshold, rcp.frame_mixing_percentage)
 
+    sizey, sizex = f0.shape[:2]
+    x_center = (sizex - 1) / 2.0
+    y_center = (sizey - 1) / 2.0
+    x_scale = max(x_center, 1.0)
+    y_scale = max(y_center, 1.0)
     value_list, locx_list, locy_list = [], [], []
     for idx in range(len(imgs)):
         frame = imgs[idx]
@@ -60,9 +89,10 @@ def main():
         cx, cy = int(touch_center[idx, 0]), int(touch_center[idx, 1])
         radius = int(touch_radius[idx])
         center = circle_center(cx, cy, radius)
-        sizey, sizex = dI.shape[:2]
         xqq, yqq = np.meshgrid(np.arange(sizex), np.arange(sizey))
         xq, yq = xqq - center[0], yqq - center[1]
+        xqq_norm = (xqq - x_center) / x_scale
+        yqq_norm = (yqq - y_center) / y_scale
         rsqcoord = xq * xq + yq * yq
         valid_rad = min(radius * radius, int(ball_radius_pix * ball_radius_pix))
         valid_mask = rsqcoord < valid_rad
@@ -77,11 +107,18 @@ def main():
         value_map = np.zeros((num_bins, num_bins, 3))
         loc_x_map = np.zeros((num_bins, num_bins))
         loc_y_map = np.zeros((num_bins, num_bins))
-        value_map[idx_x, idx_y, 0] += dI[:, :, 0][validId]
-        value_map[idx_x, idx_y, 1] += dI[:, :, 1][validId]
-        value_map[idx_x, idx_y, 2] += dI[:, :, 2][validId]
-        loc_x_map[idx_x, idx_y] += xqq[validId]
-        loc_y_map[idx_x, idx_y] += yqq[validId]
+        count_map = np.zeros((num_bins, num_bins))
+        np.add.at(value_map[:, :, 0], (idx_x, idx_y), dI[:, :, 0][validId])
+        np.add.at(value_map[:, :, 1], (idx_x, idx_y), dI[:, :, 1][validId])
+        np.add.at(value_map[:, :, 2], (idx_x, idx_y), dI[:, :, 2][validId])
+        np.add.at(loc_x_map, (idx_x, idx_y), xqq_norm[validId])
+        np.add.at(loc_y_map, (idx_x, idx_y), yqq_norm[validId])
+        np.add.at(count_map, (idx_x, idx_y), 1.0)
+        nonzero_count = count_map > 0
+        for i in range(3):
+            value_map[:, :, i][nonzero_count] /= count_map[nonzero_count]
+        loc_x_map[nonzero_count] /= count_map[nonzero_count]
+        loc_y_map[nonzero_count] /= count_map[nonzero_count]
         for i in range(3):
             value_map[:, :, i] = interpolate_holes(value_map[:, :, i])
         loc_x_map = interpolate_holes(loc_x_map)
@@ -103,8 +140,21 @@ def main():
                 sol, *_ = lstsq(A, vec)
                 params[:] = sol
     out_path = os.path.join(data_path, "polycalib.npz")
-    np.savez(out_path, bins=num_bins, grad_r=grad_r, grad_g=grad_g, grad_b=grad_b)
-    print(f"Saved {out_path} (bins={num_bins}).")
+    np.savez(
+        out_path,
+        bins=num_bins,
+        grad_r=grad_r,
+        grad_g=grad_g,
+        grad_b=grad_b,
+        x_center=x_center,
+        y_center=y_center,
+        x_scale=x_scale,
+        y_scale=y_scale,
+    )
+    print(
+        "Saved %s (bins=%d, ball_radius_mm=%.4f, mm_to_pixel=%.4f, ball_radius_pix=%.2f)."
+        % (out_path, num_bins, ball_radius_mm, 1.0 / pixmm, ball_radius_pix)
+    )
 
 if __name__ == "__main__":
     main()

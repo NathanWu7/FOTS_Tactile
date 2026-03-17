@@ -110,8 +110,16 @@ def simulate_tactile(calib_dir, height_map, use_shadow=False):
     idx_y = np.clip(idx_y, 0, bins - 1)
 
     xx, yy = np.meshgrid(np.arange(W), np.arange(H))
-    xf = xx.flatten()
-    yf = yy.flatten()
+    xf = xx.flatten().astype(np.float64)
+    yf = yy.flatten().astype(np.float64)
+    # 兼容两种 polycalib：若有坐标归一化参数则使用，避免高分辨率下回归病态
+    if all(k in poly.files for k in ("x_center", "y_center", "x_scale", "y_scale")):
+        x_center = float(poly["x_center"])
+        y_center = float(poly["y_center"])
+        x_scale = max(float(poly["x_scale"]), 1e-8)
+        y_scale = max(float(poly["y_scale"]), 1e-8)
+        xf = (xf - x_center) / x_scale
+        yf = (yf - y_center) / y_scale
     A = np.stack([xf * xf, yf * yf, xf * yf, xf, yf, np.ones(H * W)], axis=1)
 
     params_r = grad_r[idx_x, idx_y, :].reshape(H * W, 6)
@@ -121,11 +129,23 @@ def simulate_tactile(calib_dir, height_map, use_shadow=False):
     est_g = np.sum(A * params_g, axis=1)
     est_b = np.sum(A * params_b, axis=1)
 
+    contact_mask = height_map > 1e-8
     sim_img_r = np.zeros((H, W, 3))
-    sim_img_r[:, :, 0] = est_r.reshape(H, W)
-    sim_img_r[:, :, 1] = est_g.reshape(H, W)
-    sim_img_r[:, :, 2] = est_b.reshape(H, W)
+    sim_img_r[:, :, 0] = est_r.reshape(H, W) * contact_mask
+    sim_img_r[:, :, 1] = est_g.reshape(H, W) * contact_mask
+    sim_img_r[:, :, 2] = est_b.reshape(H, W) * contact_mask
     sim_img = sim_img_r + bg_proc.astype(np.float64)
+    # 诊断：若大量像素会被 0/255 裁剪，提示用户检查标定参数（常见是 mm_to_pixel 或球半径不匹配）
+    sat_ratio = []
+    for c in range(3):
+        ch = sim_img[:, :, c]
+        sat_ratio.append(float((ch <= 0).mean() + (ch >= 255).mean()))
+    if max(sat_ratio) > 0.30:
+        print(
+            "[WARN] Simulated image is heavily saturated before clipping (R/G/B sat ratios: %.3f/%.3f/%.3f). "
+            "Likely unstable polycalib. Check touch_radius vs ball_radius_pix and mm_to_pixel/ball_radius settings."
+            % (sat_ratio[0], sat_ratio[1], sat_ratio[2])
+        )
 
     if not use_shadow:
         return sim_img, None
@@ -382,6 +402,8 @@ def main():
     ap.add_argument("--max_imgs", type=int, default=24, help="Max number of imgs to show in grid (default 24, --data_only)")
     ap.add_argument("--sphere_radius", type=float, default=40, help="Sphere radius in pixels for synthetic height (sim only)")
     ap.add_argument("--sphere_depth", type=float, default=12, help="Sphere depth in pixels (sim only)")
+    ap.add_argument("--sphere_cx", type=float, default=None, help="Sphere center x in pixels (default image center)")
+    ap.add_argument("--sphere_cy", type=float, default=None, help="Sphere center y in pixels (default image center)")
     args = ap.parse_args()
 
     calib_dir = os.path.abspath(args.calib_dir)
@@ -406,10 +428,26 @@ def main():
 
     data = np.load(os.path.join(calib_dir, "dataPack.npz"), allow_pickle=True)
     f0 = data["f0"]
+    touch_center = data["touch_center"] if "touch_center" in data.files else None
     H, W = f0.shape[0], f0.shape[1]
+
+    sphere_cx = int(round(args.sphere_cx)) if args.sphere_cx is not None else (W // 2)
+    sphere_cy = int(round(args.sphere_cy)) if args.sphere_cy is not None else (H // 2)
+    if touch_center is not None and args.sphere_cx is None and args.sphere_cy is None:
+        tcx_min, tcx_max = float(np.min(touch_center[:, 0])), float(np.max(touch_center[:, 0]))
+        tcy_min, tcy_max = float(np.min(touch_center[:, 1])), float(np.max(touch_center[:, 1]))
+        if not (tcx_min <= sphere_cx <= tcx_max and tcy_min <= sphere_cy <= tcy_max):
+            print(
+                "[WARN] Synthetic sphere center (%d,%d) is outside touch_center range x:[%.1f, %.1f], y:[%.1f, %.1f]. "
+                "This may cause spatial extrapolation and unrealistic colors. "
+                "Consider --sphere_cx/--sphere_cy near data mean center."
+                % (sphere_cx, sphere_cy, tcx_min, tcx_max, tcy_min, tcy_max)
+            )
 
     height_map = make_sphere_height_map(
         H, W,
+        cx=sphere_cx,
+        cy=sphere_cy,
         radius_pix=int(args.sphere_radius),
         depth_pix=float(args.sphere_depth),
     )

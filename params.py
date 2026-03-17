@@ -1,6 +1,6 @@
 # experimental params
 ball_radius = 6.00/2
-mm_to_pixel = 19.58
+mm_to_pixel = 28
 
 # sensor setting
 sensor_h = 320
