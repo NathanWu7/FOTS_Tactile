@@ -1,49 +1,44 @@
 # Calib
 
-统一标定脚本与数据目录：Taxim 光学标定（dataPack、polycalib、shadowTable、gelmap、params.json）及标注、测试数据生成。数据统一放在 **Calib/data/**。
+Taxim + FOTS 标定脚本。输出目录为仿真器可直接读取的 calib 目录。
 
-## 脚本（均在项目根目录运行）
+## 脚本
 
-| 脚本 | 说明 |
-|------|------|
-| **build_data_pack.py** | 从图像目录 + CSV 生成 dataPack.npz |
-| **poly_table_calib.py** | 从 dataPack 生成 polycalib.npz |
-| **generate_shadow_masks.py** | 从 dataPack 生成 shadowTable.npz |
-| **write_sim_calib.py** | 向 calib 目录写入 gelmap.npy、params.json（仿真格式） |
-| **generate_calib_test_data.py** | 合成测试图 + CSV + bg.npy，输出到 data/test_data、data/csv |
-| **label_data_qt.py** | PyQt5 标注 GUI（圆心+半径） |
-| **label_data.py** | OpenCV 标注（左键圆心、右键圆周） |
-| **record.py** | 采集无接触背景帧 |
-| **visualize_calib.py** | **标定结果可视化**：用 dataPack + polycalib 从合成高度图模拟触觉图并保存/显示，用于检查标定是否有效 |
+- `build_data_pack.py`：图像 + 标注 CSV -> `dataPack.npz`
+- `poly_table_calib.py`：`dataPack.npz` -> `polycalib.npz`
+  - 可选：`--mm_to_pixel`、`--ball_radius_mm`
+- `generate_shadow_masks.py`：生成 `shadowTable.npz`
+- `write_sim_calib.py`：生成 `gelmap.npy`、`params.json`
+  - 默认从 `dataPack.npz` 自动推断分辨率
+- `visualize_calib.py`：标定结果可视化
+  - 默认保留 marker；`--smooth_background` 可切换旧行为
+  - 支持 `--sphere_cx/--sphere_cy/--sphere_radius/--sphere_depth`
 
-## 数据目录 Calib/data/
+## 数据目录
 
-- **data/csv/**：标注 CSV（如 annotate.csv、annotate_test.csv）
-- **data/test_data/**：合成测试数据（imgs/、bg.npy）
-- **data/imgs/**：可选，放置真实采集图像
+- `Calib/data/csv/`：标注 CSV（`img_names, center_x, center_y, radius`）
+- `Calib/data/test_data/`：测试图与背景
+- `Calib/data/imgs/`：可选真实图像目录
 
-## 标定流程
+## 快速流程
 
 ```bash
-# 1) 合成测试数据（可选）
-python Calib/generate_calib_test_data.py
+CALIB_DIR=assets/xense
+IMG_DIR=<你的触觉图目录>
+ANNOT_CSV=<你的标注csv>
+F0_PATH=<你的背景图.npy或png>
 
-# 2) 或标注：python Calib/label_data_qt.py --folder Calib/data/test_data/imgs --csv Calib/data/csv/annotate.csv
-
-# 3) 生成仿真 calib 目录（<calib_dir> 如 assets/simulations/GelSight_Mini/calibs/320x240）
-CALIB_DIR=<calib_dir>
-python Calib/build_data_pack.py --image_dir Calib/data/test_data/imgs --annot_csv Calib/data/csv/annotate_test.csv --f0_path Calib/data/test_data/bg.npy --out_dir $CALIB_DIR
-python Calib/poly_table_calib.py --data_path $CALIB_DIR
+python Calib/build_data_pack.py --image_dir $IMG_DIR --annot_csv $ANNOT_CSV --f0_path $F0_PATH --out_dir $CALIB_DIR
+python Calib/poly_table_calib.py --data_path $CALIB_DIR --mm_to_pixel 28 --ball_radius_mm 3.0
 python Calib/generate_shadow_masks.py --data_path $CALIB_DIR
 python Calib/write_sim_calib.py --calib_dir $CALIB_DIR
+python Calib/visualize_calib.py \
+  --calib_dir assets/xense \
+  --sphere_cx 182 --sphere_cy 404 \
+  --sphere_radius 56 --sphere_depth 14
 ```
 
-**检查标定是否有效**：生成完 dataPack + polycalib 后，可用可视化脚本看模拟触觉图是否合理：
+输出文件固定为：
+`dataPack.npz`、`polycalib.npz`、`shadowTable.npz`、`gelmap.npy`、`params.json`。
 
-```bash
-python Calib/visualize_calib.py --calib_dir $CALIB_DIR [--out_dir $CALIB_DIR] [--no_show]
-```
-
-会生成 `visualize_calib_sim.png`（模拟触觉图）、`visualize_calib_height.npy`（使用的合成高度图），并弹窗显示 f0、高度图、模拟图对比。加 `--no_show` 只保存不弹窗。
-
-详见 [docs/sim_sensor_calib.md](../docs/sim_sensor_calib.md)。
+详见 `docs/sim_sensor_calib.md`。

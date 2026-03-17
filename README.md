@@ -1,35 +1,63 @@
-# FOTS_Tactile（Isaac 分支 · 最小化）
+# FOTS_Tactile
 
-本分支仅保留 **Taxim 光学仿真** 与 **FOTS Marker** 所需标定与数据获取，供仿真 calib 目录使用。**标定相关脚本与数据统一在 Calib/ 与 Calib/data/。**
+用于生成 Taxim + FOTS 的标定结果文件，并对标定结果做可视化检查。  
+标定脚本在 `Calib/`，数据在 `Calib/data/`。
 
-## 依赖
+## 环境配置
 
 ```bash
 pip install -r requirements-py311.txt
-# 或 Isaac Lab 环境：pip install -r requirements-isaaclab23.txt
+# 或 Isaac Lab 环境
+pip install -r requirements-isaaclab23.txt
 ```
 
-## 标定流程（输出为仿真 calib 目录）
+## 标定参数需求
 
-标定结果**直接使用仿真文件格式与文件名**（`dataPack.npz`、`polycalib.npz`、`shadowTable.npz`、`gelmap.npy`、`params.json`）。完整步骤见：
+- `params.py`
+  - `mm_to_pixel`、`ball_radius`：决定 `poly_table_calib.py` 的球几何映射。
+  - `sensor_w/sensor_h`：基础分辨率参数（`write_sim_calib.py` 若检测到 `dataPack.npz`，会优先使用 `f0` 实际分辨率）。
+  - `N/M/x0/y0/dx/dy`：Marker 网格参数（用于 FOTS marker 运动配置）。
 
-- **[docs/sim_sensor_calib.md](docs/sim_sensor_calib.md)**
+## 标定流程
 
-简要步骤：
+```bash
+CALIB_DIR=assets/xense
+IMG_DIR=<你的触觉图目录>
+ANNOT_CSV=<你的标注csv>
+F0_PATH=<你的背景图.npy或png>
 
-1. 准备无接触图 f0 + 多张球体压痕图 + 标注 CSV（可用 `Calib/generate_calib_test_data.py` 生成测试数据到 **Calib/data/**，用 `Calib/label_data_qt.py` 标注）。
-2. 运行 `Calib/build_data_pack.py` → `Calib/poly_table_calib.py` → `Calib/generate_shadow_masks.py` → `Calib/write_sim_calib.py`，`--out_dir`/`--data_path`/`--calib_dir` 指向仿真 calib 目录。
+python Calib/build_data_pack.py --image_dir $IMG_DIR --annot_csv $ANNOT_CSV --f0_path $F0_PATH --out_dir $CALIB_DIR
+python Calib/poly_table_calib.py --data_path $CALIB_DIR --mm_to_pixel 28 --ball_radius_mm 3.0
+python Calib/generate_shadow_masks.py --data_path $CALIB_DIR
+python Calib/write_sim_calib.py --calib_dir $CALIB_DIR
+```
 
-## 目录说明
+输出文件：
+- `dataPack.npz`
+- `polycalib.npz`
+- `shadowTable.npz`
+- `gelmap.npy`
+- `params.json`
 
-| 目录/文件 | 说明 |
-|-----------|------|
-| **params.py** | 传感器与 Marker 参数（sensor_w, sensor_h, mm_to_pixel, N, M, x0, y0, dx, dy）。 |
-| **Calib/** | 标定脚本：dataPack、polycalib、shadowTable、gelmap、params 生成；标注与测试数据脚本。 |
-| **Calib/data/** | 统一数据目录：csv/、test_data/imgs、test_data/bg.npy 等。 |
-| **utils/marker_motion.py** | FOTS Marker 形变模型（仿真侧 FOTSMarkerSimulatorCfg 对应）。 |
-| **assets/simulations/GelSight_Mini/** | 仿真配置与 calib 目录。 |
+## 标定结果可视化
 
-## License
+```bash
+python Calib/visualize_calib.py \
+  --calib_dir assets/xense \
+  --sphere_cx 182 --sphere_cy 404 \
+  --sphere_radius 56 --sphere_depth 14
+```
 
-MIT. See LICENSE.
+常用可选参数：
+- `--sphere_cx/--sphere_cy/--sphere_radius/--sphere_depth`：控制合成接触位置与几何。
+- 默认保留 marker 纹理；若要旧行为可加 `--smooth_background`。
+- 只看数据包可用 `--data_only`。
+
+## 标定结果怎么接入仿真
+
+- 仿真器读取 `calib_folder_path` 指向的目录（即上面 `$CALIB_DIR`）。
+- Xense（TacManip）配置文件：`tac_manip/assets/sensors/xense/xense_taxim_fots.py`
+  - `optical_sim_cfg.calib_folder_path` 指向 `.../Sensors/Xense/calibs`
+  - `tactile_img_res` 从该目录 `params.json` 自动读取。
+
+详见 `docs/sim_sensor_calib.md` 与 `Calib/README.md`。
