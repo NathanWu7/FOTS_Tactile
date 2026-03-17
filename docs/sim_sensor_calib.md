@@ -21,6 +21,9 @@
 
 修改 Marker 网格时改 **params.py** 中 N, M, x0, y0, dx, dy，并同步改仿真配置中的 `marker_params`（注意行列/xy 约定是否与 params 一致）。
 
+**如何确定 x0, y0（第一个标记点）**  
+在触觉图上找到标记点组成的矩形网格，取**左上角**那一颗（列坐标最小、行坐标最小）的像素位置：(列, 行) = (x0, y0)。然后沿**列方向**量到相邻下一颗的像素差 = **dx**，沿**行方向**量到下一颗的像素差 = **dy**。若不同行/列间距不完全一致，当前实现只支持均匀网格，可用平均 dx/dy 近似，或需改代码支持各点坐标列表。
+
 ---
 
 ## 标定流程（输出为仿真 calib 目录）
@@ -76,5 +79,21 @@ python Calib/write_sim_calib.py --calib_dir $CALIB_DIR
 | 标注 GUI | `Calib/label_data_qt.py` |
 | OpenCV 标注 | `Calib/label_data.py` |
 | 采集背景帧 | `Calib/record.py` |
+| **标定结果可视化** | `Calib/visualize_calib.py`：用 dataPack + polycalib 从合成高度图模拟触觉图并保存/显示，用于判断标定是否有效 |
 
 数据统一放在 **Calib/data/**（csv/、test_data/imgs、test_data/bg.npy 等）。
+
+---
+
+## 标定结果可视化（检查是否有效）
+
+在生成 `dataPack.npz` 与 `polycalib.npz` 后，可用同一 calib 目录做一次“合成高度图 → 触觉图”的模拟，看结果是否合理：
+
+```bash
+python Calib/visualize_calib.py --calib_dir <calib_dir> [--out_dir <保存目录>] [--no_show]
+```
+
+- 会生成**合成球体压痕高度图**，再用标定表得到**模拟触觉图**，保存为 `visualize_calib_sim.png`、`visualize_calib_height.npy`。
+- 若不加 `--no_show`，会弹窗显示：f0 背景、高度图、模拟触觉图。
+- 可选 `--sphere_radius`、`--sphere_depth` 调整合成球的半径与深度（像素）。
+- 若模拟图与预期相差很大（全黑/全白、严重畸变），可检查 dataPack 的 f0/图像、poly_table_calib 的输入与参数。

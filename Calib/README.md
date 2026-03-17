@@ -14,6 +14,7 @@
 | **label_data_qt.py** | PyQt5 标注 GUI（圆心+半径） |
 | **label_data.py** | OpenCV 标注（左键圆心、右键圆周） |
 | **record.py** | 采集无接触背景帧 |
+| **visualize_calib.py** | **标定结果可视化**：用 dataPack + polycalib 从合成高度图模拟触觉图并保存/显示，用于检查标定是否有效 |
 
 ## 数据目录 Calib/data/
 
@@ -36,5 +37,13 @@ python Calib/poly_table_calib.py --data_path $CALIB_DIR
 python Calib/generate_shadow_masks.py --data_path $CALIB_DIR
 python Calib/write_sim_calib.py --calib_dir $CALIB_DIR
 ```
+
+**检查标定是否有效**：生成完 dataPack + polycalib 后，可用可视化脚本看模拟触觉图是否合理：
+
+```bash
+python Calib/visualize_calib.py --calib_dir $CALIB_DIR [--out_dir $CALIB_DIR] [--no_show]
+```
+
+会生成 `visualize_calib_sim.png`（模拟触觉图）、`visualize_calib_height.npy`（使用的合成高度图），并弹窗显示 f0、高度图、模拟图对比。加 `--no_show` 只保存不弹窗。
 
 详见 [docs/sim_sensor_calib.md](../docs/sim_sensor_calib.md)。
