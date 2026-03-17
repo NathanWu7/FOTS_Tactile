@@ -77,7 +77,7 @@ def make_sphere_height_map(h, w, cx=None, cy=None, radius_pix=40, depth_pix=15):
     return height
 
 
-def simulate_tactile(calib_dir, height_map, use_shadow=False):
+def simulate_tactile(calib_dir, height_map, use_shadow=False, preserve_marker=False):
     """
     用标定结果从高度图模拟触觉图。
     calib_dir: 含 dataPack.npz, polycalib.npz[, shadowTable.npz] 的目录
@@ -134,7 +134,8 @@ def simulate_tactile(calib_dir, height_map, use_shadow=False):
     sim_img_r[:, :, 0] = est_r.reshape(H, W) * contact_mask
     sim_img_r[:, :, 1] = est_g.reshape(H, W) * contact_mask
     sim_img_r[:, :, 2] = est_b.reshape(H, W) * contact_mask
-    sim_img = sim_img_r + bg_proc.astype(np.float64)
+    bg_base = f0.astype(np.float64) if preserve_marker else bg_proc.astype(np.float64)
+    sim_img = sim_img_r + bg_base
     # 诊断：若大量像素会被 0/255 裁剪，提示用户检查标定参数（常见是 mm_to_pixel 或球半径不匹配）
     sat_ratio = []
     for c in range(3):
@@ -404,6 +405,19 @@ def main():
     ap.add_argument("--sphere_depth", type=float, default=12, help="Sphere depth in pixels (sim only)")
     ap.add_argument("--sphere_cx", type=float, default=None, help="Sphere center x in pixels (default image center)")
     ap.add_argument("--sphere_cy", type=float, default=None, help="Sphere center y in pixels (default image center)")
+    ap.add_argument(
+        "--preserve_marker",
+        dest="preserve_marker",
+        action="store_true",
+        default=True,
+        help="Use raw f0 as simulation background to preserve marker texture (default).",
+    )
+    ap.add_argument(
+        "--smooth_background",
+        dest="preserve_marker",
+        action="store_false",
+        help="Use smoothed background (old behavior, may blur markers).",
+    )
     args = ap.parse_args()
 
     calib_dir = os.path.abspath(args.calib_dir)
@@ -451,7 +465,12 @@ def main():
         radius_pix=int(args.sphere_radius),
         depth_pix=float(args.sphere_depth),
     )
-    sim_img, _ = simulate_tactile(calib_dir, height_map, use_shadow=False)
+    sim_img, _ = simulate_tactile(
+        calib_dir,
+        height_map,
+        use_shadow=False,
+        preserve_marker=args.preserve_marker,
+    )
 
     out_img = np.clip(sim_img, 0, 255).astype(np.uint8)
     out_path = os.path.join(out_dir, "visualize_calib_sim.png")
